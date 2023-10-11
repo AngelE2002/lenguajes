@@ -1,8 +1,6 @@
-const staticFunkos = "dev-funko-site-v1"
-
+const staticFunkos = "dev-funko-site-v2"; // Cambiado el nombre de la caché
 
 const assets = [
-
     "/",
     "/index.html",
     "/css/styles.css",
@@ -14,72 +12,60 @@ const assets = [
     "/images/Flutter.png",
     "/images/py.webp",
     "/images/go.png"
-
 ];
 
-async function preCache(){
-
-    const cache = await caches.open(staticFunkos)
+async function preCache() {
+    const cache = await caches.open(staticFunkos);
     return cache.addAll(assets);
-
-
 }
 
+self.addEventListener("install", installEvent => {
+    installEvent.waitUntil(preCache().then(() => self.skipWaiting()));
+});
 
+async function cacheFirst(request) {
+    const cacheResponse = await caches.match(request);
 
+    if (cacheResponse) {
+        return cacheResponse;
+    }
 
-self.addEventListener("install",installEvent => {
-    installEvent.waitUntil(preCache());
-})
+    try {
+        const networkResponse = await fetch(request);
 
+        if (networkResponse.ok) {
+            const cache = await caches.open(staticFunkos);
+            cache.put(request, networkResponse.clone());
+        }
 
-async function cacheFirst(request){
-
-const cacheResponse = await caches.match(request);
-
-if(cacheResponse){
-    return cacheResponse
+        return networkResponse;
+    } catch (error) {
+        return caches.match(request) || Response.error();
+    }
 }
 
-try {
- const networkResponse = await fetch(request);
+self.addEventListener("fetch", fetchEvent => {
+    fetchEvent.respondWith(cacheFirst(fetchEvent.request));
+});
 
- if(networkResponse.ok){
+self.addEventListener("activate", activateEvent => {
+    activateEvent.waitUntil(
+        caches.keys().then(cacheNames => {
+            return Promise.all(
+                cacheNames.map(cacheName => {
+                    if (cacheName !== staticFunkos) {
+                        return caches.delete(cacheName);
+                    }
+                })
+            );
+        }).then(() => self.clients.claim())
+    );
+});
 
-const cache= await caches.open(staticFunkos);
-cache.put(request, networkResponse.clone());
-
- }
-
- return networkResponse;
+if ("serviceWorker" in navigator) {
+    window.addEventListener("load", function() {
+        navigator.serviceWorker.register("/serviceWorker.js")
+            .then(res => console.log("Service Worker registrado satisfactoriamente"))
+            .catch(err => console.log("No se pudo registrar el Service Worker", err));
+    });
 }
-catch( error ){
-    return Response.error();
-}
-
-
-
-}
-
-/////
-
-self.addEventListener("fetch", fetchEvent =>{
-fetchEvent.respondWith(cacheFirst(fetchEvent.request))
-})
-
-///
-
-if("serviceWorker" in navigator){
-
-   // console.log("Si soporta SW")
-
-   window.addEventListener("load", function(){
-
-    this.navigator.serviceWorker
-        .register("/serviceWorker.js")
-        .then(res => console.log("Se registro satisfactoriamente"))
-        .catch(err => console.log("No se registro el service Worker"))
-   })
-
-}
-
